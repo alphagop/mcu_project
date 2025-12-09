@@ -1,0 +1,19 @@
+# 忽略构建文件
+build/
+sdkconfig
+sdkconfig.old
+
+# 忽略IDE配置文件
+.vscode/
+.idea/
+*.workspace
+
+# 忽略编译输出
+*.bin
+*.elf
+*.map
+*.lst
+
+# 忽略系统文件
+.DS_Store
+Thumbs.db
