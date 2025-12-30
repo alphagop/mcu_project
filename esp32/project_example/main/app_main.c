@@ -19,7 +19,7 @@ SemaphoreHandle_t g_i2c_mutex = NULL;
 
 static const char *TAG = "AppMain";
 
-// 系统监控任务
+// 系统监控任务（演示事件组使用）
 void task_system_monitor(void *pvParameter)
 {
     ESP_LOGI(TAG, "System monitor task started");
@@ -160,59 +160,109 @@ void task_network_manager(void *pvParameter)
     }
 }
 
+//模拟led灯 受任务通知控制
+void task_led_blinker(void *pvParameter)
+{
+    ESP_LOGI(TAG, "LED blinker task started");
+    
+    const TickType_t xMaxBlockTime = pdMS_TO_TICKS(1000);
+    uint32_t ulNotificationValue;
+    while (1) {
+        // 等待任务通知以改变LED状态
+        if (xTaskNotifyWait(0x00,          // 不清除任何位
+                            ULONG_MAX,    // 清除所有位
+                            &ulNotificationValue,
+                            xMaxBlockTime) == pdTRUE) {
+            if (ulNotificationValue & 0x01) {
+                ESP_LOGI(TAG, "LED ON");
+                // 模拟LED点亮
+            } else {
+                ESP_LOGI(TAG, "LED OFF");
+                // 模拟LED熄灭
+            }
+        }
+    }
+}
+
+//模拟任务通知控制led状态
+void control_led_task(TaskHandle_t ledTaskHandle)
+{
+    ESP_LOGI(TAG, "Controlling LED task");
+    // 模拟控制LED的开关
+    for (int i = 0; i < 5; i++) {
+        // 发送通知打开LED
+        xTaskNotify(ledTaskHandle, 0x01, eSetValueWithOverwrite);
+        vTaskDelay(pdMS_TO_TICKS(2000)); // LED保持2秒
+        // 发送通知关闭LED
+        xTaskNotify(ledTaskHandle, 0x00, eSetValueWithOverwrite);
+        vTaskDelay(pdMS_TO_TICKS(2000)); // LED关闭2秒
+    }
+}
+
 // 任务初始化函数
 esp_err_t app_tasks_init(void)
 {
     esp_err_t ret = ESP_OK;
     
     // 创建事件组
-    g_app_events = xEventGroupCreate();
-    if (g_app_events == NULL) {
-        ESP_LOGE(TAG, "Failed to create event group");
-        return ESP_FAIL;
-    }
+    // g_app_events = xEventGroupCreate();
+    // if (g_app_events == NULL) {
+    //     ESP_LOGE(TAG, "Failed to create event group");
+    //     return ESP_FAIL;
+    // }
     
-    // 创建数据队列
-    g_data_queue = xQueueCreate(QUEUE_LENGTH, sizeof(data_message_t));
-    if (g_data_queue == NULL) {
-        ESP_LOGE(TAG, "Failed to create data queue");
-        return ESP_FAIL;
-    }
+    // // 创建数据队列
+    // g_data_queue = xQueueCreate(QUEUE_LENGTH, sizeof(data_message_t));
+    // if (g_data_queue == NULL) {
+    //     ESP_LOGE(TAG, "Failed to create data queue");
+    //     return ESP_FAIL;
+    // }
     
-    // 创建互斥锁
-    g_i2c_mutex = xSemaphoreCreateMutex();
-    if (g_i2c_mutex == NULL) {
-        ESP_LOGE(TAG, "Failed to create I2C mutex");
-        return ESP_FAIL;
-    }
+    // // 创建互斥锁
+    // g_i2c_mutex = xSemaphoreCreateMutex();
+    // if (g_i2c_mutex == NULL) {
+    //     ESP_LOGE(TAG, "Failed to create I2C mutex");
+    //     return ESP_FAIL;
+    // }
     
-    // 创建系统监控任务
-    if (xTaskCreate(task_system_monitor, "SystemMonitor", 
-                    TASK_STACK_DEPTH, NULL, TASK_MANAGER_PRIORITY, NULL) != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create system monitor task");
-        return ESP_FAIL;
-    }
+    // // 创建系统监控任务
+    // if (xTaskCreate(task_system_monitor, "SystemMonitor", 
+    //                 TASK_STACK_DEPTH, NULL, TASK_MANAGER_PRIORITY, NULL) != pdPASS) {
+    //     ESP_LOGE(TAG, "Failed to create system monitor task");
+    //     return ESP_FAIL;
+    // }
     
-    // 创建数据处理任务
-    if (xTaskCreate(task_data_processor, "DataProcessor", 
-                    TASK_STACK_DEPTH, NULL, DATA_PROCESSOR_PRIORITY, NULL) != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create data processor task");
-        return ESP_FAIL;
-    }
+    // // 创建数据处理任务
+    // if (xTaskCreate(task_data_processor, "DataProcessor", 
+    //                 TASK_STACK_DEPTH, NULL, DATA_PROCESSOR_PRIORITY, NULL) != pdPASS) {
+    //     ESP_LOGE(TAG, "Failed to create data processor task");
+    //     return ESP_FAIL;
+    // }
     
-    // 创建传感器读取任务
-    if (xTaskCreate(task_sensor_reader, "SensorReader", 
-                    TASK_STACK_DEPTH, NULL, SENSOR_READER_PRIORITY, NULL) != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create sensor reader task");
-        return ESP_FAIL;
-    }
+    // // 创建传感器读取任务
+    // if (xTaskCreate(task_sensor_reader, "SensorReader", 
+    //                 TASK_STACK_DEPTH, NULL, SENSOR_READER_PRIORITY, NULL) != pdPASS) {
+    //     ESP_LOGE(TAG, "Failed to create sensor reader task");
+    //     return ESP_FAIL;
+    // }
     
-    // 创建网络管理任务
-    if (xTaskCreate(task_network_manager, "NetworkManager", 
-                    TASK_STACK_DEPTH, NULL, SENSOR_READER_PRIORITY, NULL) != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create network manager task");
+    // // 创建网络管理任务
+    // if (xTaskCreate(task_network_manager, "NetworkManager", 
+    //                 TASK_STACK_DEPTH, NULL, SENSOR_READER_PRIORITY, NULL) != pdPASS) {
+    //     ESP_LOGE(TAG, "Failed to create network manager task");
+    //     return ESP_FAIL;
+    // }
+
+    // 创建LED闪烁任务
+    TaskHandle_t ledTaskHandle = NULL;
+    if (xTaskCreate(task_led_blinker, "LEDBlinker", 
+                    TASK_STACK_DEPTH, NULL, LED_BLINKER_PRIORITY, &ledTaskHandle) != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create LED blinker task");
         return ESP_FAIL;
     }
+
+    // 启动LED控制任务
+    control_led_task(ledTaskHandle);
     
     ESP_LOGI(TAG, "All tasks created successfully");
     return ESP_OK;
